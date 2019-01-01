@@ -27,23 +27,36 @@ type Props = {
   data: Array<Object>,
   renderCard: (item: Object) => React.Node,
   renderNoMoreCards: () => React.Node,
-  onSwipeRight: (item?: Object) => void,
-  onSwipeLeft: (item?: Object) => void
+  onSwipeRight?: (item?: Object) => void,
+  onSwipeLeft?: (item?: Object) => void
 }
 
 /**
  * Set the types of the component`s State
  */
 type State = {
+  prevData: Array<Object>,
   cardIndex: number
 }
 
 class Deck extends React.Component<Props, State> {
   /**
-   * The Current Card index that will receive the Animation.View
-   * It gets the next card index after each Swipe complete
+   * Default props for the callback method on each
+   * swipe event
    */
-  state = { cardIndex: 0 }
+  static defaultProps = {
+    onSwipeRight: () => console.log('Please pass a method on Swipe Right'),
+    onSwipeLeft: () => console.log('Please pass a method on Swipe Left')
+  }
+
+  /**
+   * Set the initial state for the cardINdex and the
+   * data control state.
+   */
+  state = {
+    prevData: [],
+    cardIndex: 0
+  }
 
   /**
    * The Animation Position properties that is used to set
@@ -59,6 +72,16 @@ class Deck extends React.Component<Props, State> {
 
   constructor(props: Props) {
     super(props)
+
+    /**
+     * assign the data props to a control state and
+     * The Current Card index that will receive the Animation.View
+     * It gets the next card index after each Swipe complete
+     */
+    this.state = {
+      prevData: props.data,
+      cardIndex: 0
+    }
 
     /**
      * The first position of the Animated element
@@ -89,6 +112,26 @@ class Deck extends React.Component<Props, State> {
     this.panResponder = panResponder
   }
 
+  /**
+   * If the Data has changed we reset the cardIndex to 0
+   * and repopulate the state that controls the data received with
+   * the new one.
+   * If nothing has changed return null.
+   */
+  static getDerivedStateFromProps(props: Props, state: State) {
+    if (props.data !== state.prevData) {
+      return {
+        prevData: props.data,
+        cardIndex: 0
+      }
+    }
+
+    return null
+  }
+
+  /**
+   * Hack for Android
+   */
   componentDidUpdate() {
     if (UIManager.setLayoutAnimationEnabledExperimental) {
       UIManager.setLayoutAnimationEnabledExperimental(true)
@@ -99,7 +142,7 @@ class Deck extends React.Component<Props, State> {
 
   /**
    * This method defines the amount of rotation that the card will
-   * have when it`s dragged by a press event. Then returns a Object
+   * have when it`s dragged by a gesture event. Then returns a Object
    * with the animation style amd interpolation.
    */
   getCardStyle = () => {
@@ -107,7 +150,7 @@ class Deck extends React.Component<Props, State> {
 
     const rotate = this.position.x.interpolate({
       inputRange: [-rotationDistance, 0, rotationDistance],
-      outputRange: ['-120deg', '0deg', '120deg']
+      outputRange: ['45deg', '0deg', '-45deg']
     })
 
     return {
@@ -127,8 +170,8 @@ class Deck extends React.Component<Props, State> {
   }
 
   /**
-   * When the card is released far enough to the right, we animate it
-   * all the way out of the screen to the Right.
+   * When the card is released far enough to the right or the left,
+   * we animate it all the way out of the screen.
    */
   forceSwipe = (direction: string) => {
     const x = direction === 'right'
@@ -152,9 +195,9 @@ class Deck extends React.Component<Props, State> {
     this.position.setValue({ x: 0, y: 0 })
     this.setState({ cardIndex: cardIndex + 1 })
 
-    return direction === 'right'
-      ? onSwipeRight(item)
-      : onSwipeLeft(item)
+    return (direction === 'right')
+      ? onSwipeRight && onSwipeRight(item)
+      : onSwipeLeft && onSwipeLeft(item)
   }
 
   /**
@@ -165,13 +208,27 @@ class Deck extends React.Component<Props, State> {
     const { data, renderCard, renderNoMoreCards } = this.props
     const { cardIndex } = this.state
 
+    /**
+     * Render the card with the message that there is no
+     * more cards left in the data.
+     */
     if (cardIndex >= data.length) {
       return renderNoMoreCards()
     }
 
+    /**
+     * Loop trough the data array
+     */
     return data.map((item, index) => {
+      /**
+       * If there is no more cards left
+       */
       if (index < cardIndex) { return null }
 
+      /**
+       * If this is our current card, attach the animation
+       * attributes to it.
+       */
       if (index === cardIndex) {
         return (
           <Animated.View
@@ -187,10 +244,21 @@ class Deck extends React.Component<Props, State> {
         )
       }
 
+      /**
+       * Render the secondary cards.
+       * PS: The Animated.View tag was used here to prevent the
+       * card infos to be refetched causing layout lag when the transition
+       * between cards occurs.
+       */
       return (
         <Animated.View
           key={item.id}
-          style={[cardStyle, { top: 5 * (index - cardIndex) }]}
+          style={[
+            cardStyle,
+            {
+              top: 5 * (index - cardIndex)
+            }
+          ]}
         >
           {renderCard(item)}
         </Animated.View>
@@ -207,6 +275,10 @@ class Deck extends React.Component<Props, State> {
   }
 }
 
+/**
+ * Sets the card width and position all of them over each other
+ * the 'elevation' attribute is to set the correct order on Android.
+ */
 const styles = {
   cardStyle: {
     position: 'absolute',
